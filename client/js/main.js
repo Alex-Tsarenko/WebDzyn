@@ -42,6 +42,31 @@ function init() {
   setupWebRTCCallbacks();
 
   connectToServer();
+  checkUrlParameters();
+}
+
+function checkUrlParameters() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomId = urlParams.get('room');
+  
+  if (roomId) {
+    elements.roomIdInput.value = roomId.toUpperCase();
+    
+    setTimeout(() => {
+      if (signalingManager.isConnected) {
+        handleJoinRoom();
+      } else {
+        const checkConnection = setInterval(() => {
+          if (signalingManager.isConnected) {
+            clearInterval(checkConnection);
+            handleJoinRoom();
+          }
+        }, 100);
+        
+        setTimeout(() => clearInterval(checkConnection), 5000);
+      }
+    }, 500);
+  }
 }
 
 function setupEventListeners() {
@@ -215,12 +240,19 @@ async function handleCreateRoom() {
   elements.createRoomBtn.disabled = true;
   
   try {
-    await signalingManager.createRoom();
+    const response = await signalingManager.createRoom();
+    updateUrlWithRoom(response.roomId);
   } catch (error) {
     console.error('Error creating room:', error);
     showNotification('Не удалось создать комнату: ' + error.message, 'error');
     elements.createRoomBtn.disabled = false;
   }
+}
+
+function updateUrlWithRoom(roomId) {
+  const url = new URL(window.location);
+  url.searchParams.set('room', roomId);
+  window.history.pushState({}, '', url);
 }
 
 async function handleJoinRoom() {
@@ -265,15 +297,16 @@ async function initiateCall(targetUserId) {
 
 function handleCopyRoomId() {
   const roomId = elements.currentRoomId.textContent;
+  const roomUrl = `${window.location.origin}/?room=${roomId}`;
   
-  navigator.clipboard.writeText(roomId).then(() => {
-    showNotification('ID комнаты скопирован в буфер обмена', 'success');
+  navigator.clipboard.writeText(roomUrl).then(() => {
+    showNotification('Ссылка на комнату скопирована в буфер обмена', 'success');
     elements.copyRoomIdBtn.textContent = '✓';
     setTimeout(() => {
       elements.copyRoomIdBtn.textContent = '📋';
     }, 2000);
   }).catch(() => {
-    showNotification('Не удалось скопировать ID', 'error');
+    showNotification('Не удалось скопировать ссылку', 'error');
   });
 }
 
