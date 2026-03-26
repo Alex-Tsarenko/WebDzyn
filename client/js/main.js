@@ -282,7 +282,7 @@ function handleToggleMute() {
   
   if (isMuted) {
     elements.muteBtn.classList.add('muted');
-    elements.muteBtn.querySelector('.icon').textContent = '🔇';
+    elements.muteBtn.querySelector('.icon').textContent = '🎙️❌';
     showNotification('Микрофон выключен', 'success');
   } else {
     elements.muteBtn.classList.remove('muted');
