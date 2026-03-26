@@ -1,0 +1,33 @@
+{
+  "name": "webdzyn",
+  "version": "1.0.0",
+  "description": "WebRTC браузерная звонилка для аудио звонков в реальном времени",
+  "main": "server/server.js",
+  "scripts": {
+    "prestart": "npm install",
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "webrtc",
+    "audio",
+    "calling",
+    "websocket",
+    "signaling"
+  ],
+  "author": "Alex Tsarenko",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "socket.io-client": "^4.x.x",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

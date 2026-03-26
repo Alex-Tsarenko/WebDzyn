@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebDzyn - Звонилка</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="logo">📞 WebDzyn</h1>
+      <p class="tagline">Аудио звонки в реальном времени</p>
+    </header>
+
+    <main class="main">
+      <div id="start-screen" class="screen active">
+        <div class="card">
+          <h2>Начать звонок</h2>
+          <div class="button-group">
+            <button id="create-room-btn" class="btn btn-primary">
+              <span class="btn-icon">➕</span>
+              Создать комнату
+            </button>
+            <div class="divider">или</div>
+            <div class="join-room-form">
+              <input 
+                type="text" 
+                id="room-id-input" 
+                class="input" 
+                placeholder="Введите ID комнаты"
+                maxlength="6"
+              >
+              <button id="join-room-btn" class="btn btn-secondary">
+                <span class="btn-icon">🚪</span>
+                Присоединиться
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="room-screen" class="screen">
+        <div class="room-container">
+          <div class="room-header">
+            <div class="room-info">
+              <h3>Комната: <span id="current-room-id" class="room-id"></span></h3>
+              <button id="copy-room-id-btn" class="btn-icon-small" title="Скопировать ID">
+                📋
+              </button>
+            </div>
+            <div class="connection-status">
+              <span id="connection-status" class="status-indicator">●</span>
+              <span id="connection-text">Подключение...</span>
+            </div>
+          </div>
+
+          <div class="call-area">
+            <div class="audio-visualizer">
+              <div class="avatar">
+                <span id="user-avatar">👤</span>
+              </div>
+              <div class="audio-bars">
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+              </div>
+              <p id="call-status" class="call-status">Ожидание собеседника...</p>
+            </div>
+
+            <audio id="remote-audio" autoplay></audio>
+            <audio id="local-audio" muted></audio>
+          </div>
+
+          <div class="controls">
+            <button id="mute-btn" class="control-btn" title="Выключить микрофон">
+              <span class="icon">🎤</span>
+              <span class="label">Микрофон</span>
+            </button>
+            <button id="end-call-btn" class="control-btn end-call" title="Завершить звонок">
+              <span class="icon">📞</span>
+              <span class="label">Завершить</span>
+            </button>
+          </div>
+
+          <div class="chat-section">
+            <button id="toggle-chat-btn" class="btn-text">
+              💬 Чат <span id="unread-count" class="badge hidden">0</span>
+            </button>
+            <div id="chat-container" class="chat-container hidden">
+              <div id="chat-messages" class="chat-messages"></div>
+              <div class="chat-input-container">
+                <input 
+                  type="text" 
+                  id="chat-input" 
+                  class="input" 
+                  placeholder="Введите сообщение..."
+                  maxlength="500"
+                >
+                <button id="send-message-btn" class="btn btn-primary btn-sm">
+                  Отправить
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="notification" class="notification hidden">
+      <span id="notification-text"></span>
+    </div>
+
+    <div id="modal" class="modal hidden">
+      <div class="modal-content">
+        <h3 id="modal-title"></h3>
+        <p id="modal-message"></p>
+        <div class="modal-buttons">
+          <button id="modal-close-btn" class="btn btn-secondary">Закрыть</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/signaling.js"></script>
+  <script src="js/webrtc.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
