@@ -159,13 +159,11 @@ function setupSignalingCallbacks() {
 
   signalingManager.on('userJoined', async (userId) => {
     console.log('[Main] 👤 User joined:', userId);
+    console.log('[Main] ⏳ Waiting for offer from joiner (not initiating to avoid glare)');
     currentRemoteUserId = userId;
-    elements.callStatus.textContent = 'Собеседник присоединился';
+    elements.callStatus.textContent = 'Собеседник присоединился, ожидание соединения...';
     elements.userAvatar.textContent = '👥';
     showNotification('Собеседник присоединился к звонку', 'success');
-    
-    console.log('[Main] 📞 Initiating call to new user:', userId);
-    await initiateCall(userId);
   });
 
   signalingManager.on('userLeft', (userId) => {
