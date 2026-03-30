@@ -103,6 +103,22 @@ class WebRTCManager {
       });
       console.log('[WebRTC] 📥 Streams:', event.streams);
       
+      event.track.onunmute = () => {
+        console.log('[WebRTC] 🔊 Remote track UNMUTED - media is flowing!', {
+          kind: event.track.kind,
+          id: event.track.id,
+          muted: event.track.muted
+        });
+      };
+      
+      event.track.onmute = () => {
+        console.log('[WebRTC] 🔇 Remote track MUTED - media stopped!', {
+          kind: event.track.kind,
+          id: event.track.id,
+          muted: event.track.muted
+        });
+      };
+      
       this.remoteStream = event.streams[0];
       
       if (this.remoteStream) {
@@ -135,6 +151,11 @@ class WebRTCManager {
     this.peerConnection.oniceconnectionstatechange = () => {
       console.log('[WebRTC] 🧊 ICE connection state:', this.peerConnection.iceConnectionState);
       console.log('[WebRTC] 🧊 ICE gathering state:', this.peerConnection.iceGatheringState);
+      
+      if (this.peerConnection.iceConnectionState === 'connected' || 
+          this.peerConnection.iceConnectionState === 'completed') {
+        this._logConnectionStats();
+      }
     };
 
     this.peerConnection.onsignalingstatechange = () => {
@@ -313,6 +334,55 @@ class WebRTCManager {
     this.remoteStream = null;
     this.isMuted = false;
     console.log('[WebRTC] ✅ WebRTC cleanup complete');
+  }
+
+  async _logConnectionStats() {
+    if (!this.peerConnection) return;
+    
+    try {
+      const stats = await this.peerConnection.getStats();
+      stats.forEach(report => {
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          console.log('[WebRTC] 📊 Active candidate pair:', {
+            localCandidateId: report.localCandidateId,
+            remoteCandidateId: report.remoteCandidateId,
+            bytesSent: report.bytesSent,
+            bytesReceived: report.bytesReceived,
+            currentRoundTripTime: report.currentRoundTripTime
+          });
+        }
+        if (report.type === 'local-candidate') {
+          console.log('[WebRTC] 📊 Local candidate:', {
+            id: report.id,
+            type: report.candidateType,
+            protocol: report.protocol,
+            address: report.address,
+            port: report.port
+          });
+        }
+        if (report.type === 'remote-candidate') {
+          console.log('[WebRTC] 📊 Remote candidate:', {
+            id: report.id,
+            type: report.candidateType,
+            protocol: report.protocol,
+            address: report.address,
+            port: report.port
+          });
+        }
+      });
+      
+      if (this.remoteStream) {
+        const audioTracks = this.remoteStream.getAudioTracks();
+        console.log('[WebRTC] 📊 Remote audio tracks status:', audioTracks.map(t => ({
+          id: t.id,
+          enabled: t.enabled,
+          muted: t.muted,
+          readyState: t.readyState
+        })));
+      }
+    } catch (e) {
+      console.error('[WebRTC] ❌ Error getting stats:', e);
+    }
   }
 
   getConnectionState() {
