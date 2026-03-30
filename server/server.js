@@ -24,11 +24,17 @@ function log(level, message, data = {}) {
 }
 
 io.on('connection', (socket) => {
-  log('info', 'New client connected', { socketId: socket.id });
+  log('info', '🔌 New client connected', { 
+    socketId: socket.id,
+    address: socket.handshake.address,
+    headers: socket.handshake.headers['user-agent']
+  });
   users.set(socket.id, { socketId: socket.id, roomId: null });
 
   socket.on('create-room', (callback) => {
     const roomId = generateRoomId();
+    log('info', '🏠 Creating room', { roomId, socketId: socket.id });
+    
     rooms.set(roomId, {
       id: roomId,
       users: [socket.id],
@@ -39,7 +45,11 @@ io.on('connection', (socket) => {
     const user = users.get(socket.id);
     user.roomId = roomId;
     
-    log('info', 'Room created', { roomId, socketId: socket.id });
+    log('info', '✅ Room created successfully', { 
+      roomId, 
+      socketId: socket.id,
+      iceServers: config.iceServers
+    });
     
     if (callback) {
       callback({ success: true, roomId, iceServers: config.iceServers });
@@ -47,10 +57,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join-room', (roomId, callback) => {
+    log('info', '🚪 Attempting to join room', { roomId, socketId: socket.id });
     const room = rooms.get(roomId);
     
     if (!room) {
-      log('warn', 'Room not found', { roomId, socketId: socket.id });
+      log('warn', '⚠️ Room not found', { roomId, socketId: socket.id });
       if (callback) {
         callback({ success: false, error: 'Room not found' });
       }
@@ -58,7 +69,7 @@ io.on('connection', (socket) => {
     }
     
     if (room.users.length >= config.maxRoomSize) {
-      log('warn', 'Room is full', { roomId, socketId: socket.id });
+      log('warn', '⚠️ Room is full', { roomId, socketId: socket.id, maxSize: config.maxRoomSize });
       if (callback) {
         callback({ success: false, error: 'Room is full' });
       }
@@ -70,15 +81,31 @@ io.on('connection', (socket) => {
     const user = users.get(socket.id);
     user.roomId = roomId;
     
-    log('info', 'User joined room', { roomId, socketId: socket.id, usersCount: room.users.length });
+    log('info', '✅ User joined room successfully', { 
+      roomId, 
+      socketId: socket.id, 
+      usersCount: room.users.length,
+      allUsers: room.users
+    });
     
+    log('info', '📢 Notifying existing users about new user', { 
+      roomId, 
+      newUserId: socket.id,
+      existingUsers: room.users.filter(id => id !== socket.id)
+    });
     socket.to(roomId).emit('user-joined', { userId: socket.id });
     
     if (callback) {
+      const existingUsers = room.users.filter(id => id !== socket.id);
+      log('info', '📤 Sending join confirmation', {
+        roomId,
+        existingUsers,
+        iceServers: config.iceServers
+      });
       callback({ 
         success: true, 
         roomId, 
-        users: room.users.filter(id => id !== socket.id),
+        users: existingUsers,
         iceServers: config.iceServers 
       });
     }
@@ -86,99 +113,154 @@ io.on('connection', (socket) => {
 
   socket.on('offer', (data) => {
     const { roomId, offer, targetUserId } = data;
-    log('info', 'Offer received', { roomId, from: socket.id, to: targetUserId });
+    log('info', '📝 Offer received', { 
+      roomId, 
+      from: socket.id, 
+      to: targetUserId || 'broadcast',
+      offerType: offer?.type,
+      hasSdp: !!offer?.sdp
+    });
     
     if (targetUserId) {
+      log('info', '📤 Forwarding offer to specific user', { from: socket.id, to: targetUserId });
       io.to(targetUserId).emit('offer', {
         offer,
         userId: socket.id
       });
     } else {
+      log('info', '📤 Broadcasting offer to room', { roomId, from: socket.id });
       socket.to(roomId).emit('offer', {
         offer,
         userId: socket.id
       });
     }
+    log('info', '✅ Offer forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
   });
 
   socket.on('answer', (data) => {
     const { roomId, answer, targetUserId } = data;
-    log('info', 'Answer received', { roomId, from: socket.id, to: targetUserId });
+    log('info', '📝 Answer received', { 
+      roomId, 
+      from: socket.id, 
+      to: targetUserId || 'broadcast',
+      answerType: answer?.type,
+      hasSdp: !!answer?.sdp
+    });
     
     if (targetUserId) {
+      log('info', '📤 Forwarding answer to specific user', { from: socket.id, to: targetUserId });
       io.to(targetUserId).emit('answer', {
         answer,
         userId: socket.id
       });
     } else {
+      log('info', '📤 Broadcasting answer to room', { roomId, from: socket.id });
       socket.to(roomId).emit('answer', {
         answer,
         userId: socket.id
       });
     }
+    log('info', '✅ Answer forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
   });
 
   socket.on('ice-candidate', (data) => {
     const { roomId, candidate, targetUserId } = data;
-    log('info', 'ICE candidate received', { roomId, from: socket.id, to: targetUserId });
+    log('info', '🧊 ICE candidate received', { 
+      roomId, 
+      from: socket.id, 
+      to: targetUserId || 'broadcast',
+      candidateType: candidate?.type,
+      protocol: candidate?.protocol,
+      hasCandidate: !!candidate?.candidate
+    });
     
     if (targetUserId) {
+      log('info', '📤 Forwarding ICE candidate to specific user', { from: socket.id, to: targetUserId });
       io.to(targetUserId).emit('ice-candidate', {
         candidate,
         userId: socket.id
       });
     } else {
+      log('info', '📤 Broadcasting ICE candidate to room', { roomId, from: socket.id });
       socket.to(roomId).emit('ice-candidate', {
         candidate,
         userId: socket.id
       });
     }
+    log('info', '✅ ICE candidate forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
   });
 
   socket.on('message', (data) => {
     const { roomId, message } = data;
-    log('info', 'Chat message', { roomId, from: socket.id });
+    log('info', '💬 Chat message received', { 
+      roomId, 
+      from: socket.id,
+      messageLength: message?.length
+    });
     
     socket.to(roomId).emit('message', {
       message,
       userId: socket.id,
       timestamp: Date.now()
     });
+    log('info', '✅ Chat message forwarded', { roomId, from: socket.id });
   });
 
   socket.on('leave-room', () => {
     handleUserLeave(socket);
   });
 
-  socket.on('disconnect', () => {
-    log('info', 'Client disconnected', { socketId: socket.id });
+  socket.on('disconnect', (reason) => {
+    log('info', '🔌 Client disconnected', { 
+      socketId: socket.id,
+      reason: reason
+    });
     handleUserLeave(socket);
     users.delete(socket.id);
+    log('info', '✅ User cleanup complete', { socketId: socket.id });
   });
 });
 
 function handleUserLeave(socket) {
   const user = users.get(socket.id);
-  if (!user || !user.roomId) return;
+  if (!user || !user.roomId) {
+    log('info', '⚠️ User leave: no room to leave', { socketId: socket.id });
+    return;
+  }
   
   const roomId = user.roomId;
   const room = rooms.get(roomId);
   
   if (room) {
+    const beforeCount = room.users.length;
     room.users = room.users.filter(id => id !== socket.id);
     
-    log('info', 'User left room', { roomId, socketId: socket.id, remainingUsers: room.users.length });
+    log('info', '🚪 User left room', { 
+      roomId, 
+      socketId: socket.id, 
+      beforeCount,
+      remainingUsers: room.users.length,
+      remainingUserIds: room.users
+    });
     
+    log('info', '📢 Notifying remaining users', { 
+      roomId, 
+      leftUserId: socket.id,
+      notifyingUsers: room.users
+    });
     socket.to(roomId).emit('user-left', { userId: socket.id });
     
     if (room.users.length === 0) {
       rooms.delete(roomId);
-      log('info', 'Room deleted (empty)', { roomId });
+      log('info', '🗑️ Room deleted (empty)', { roomId });
     }
+  } else {
+    log('warn', '⚠️ Room not found when user leaving', { roomId, socketId: socket.id });
   }
   
   socket.leave(roomId);
   user.roomId = null;
+  log('info', '✅ User leave handled', { socketId: socket.id, roomId });
 }
 
 function generateRoomId() {
