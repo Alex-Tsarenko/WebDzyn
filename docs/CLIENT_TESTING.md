@@ -5,7 +5,6 @@
 ### 1. Запуск приложения
 
 ```bash
-# Запустить сервер
 npm start
 ```
 
@@ -27,9 +26,9 @@ npm start
 4. Вставьте ID в поле "Введите ID комнаты"
 5. Нажмите **"Присоединиться"**
 6. Разрешите доступ к микрофону
-7. ✅ В обоих окнах должно появиться "Собеседник присоединился"
-8. ✅ Аватар должен измениться на 👥
-9. ✅ Через несколько секунд статус должен стать "Звонок активен"
+7. ✅ В обоих окнах должно появиться "Новый участник присоединился"
+8. ✅ В сетке участников должна появиться карточка нового пользователя
+9. ✅ Статус должен стать "Звонок активен"
 
 #### Тест 3: Аудио связь
 1. Говорите в микрофон в первом окне
@@ -55,18 +54,25 @@ npm start
 6. Если чат закрыт во втором окне:
    - ✅ Должен появиться счетчик непрочитанных сообщений
 
-#### Тест 6: Копирование ID комнаты
+#### Тест 6: Копирование ссылки на комнату
 1. Нажмите кнопку 📋 рядом с ID комнаты
-2. ✅ Должно появиться уведомление "ID комнаты скопирован"
+2. ✅ Должно появиться уведомление "Ссылка на комнату скопирована"
 3. ✅ Иконка должна временно измениться на ✓
 4. Вставьте из буфера обмена (Ctrl+V / Cmd+V)
-5. ✅ Должен вставиться правильный ID
+5. ✅ Должна вставиться ссылка вида `http://localhost:3000/?room=XXXXXX`
 
-#### Тест 7: Завершение звонка
+#### Тест 7: Многопользовательский режим
+1. Создайте комнату в первом окне
+2. Присоединитесь во втором и третьем окнах
+3. ✅ Все участники должны видеть друг друга в сетке
+4. ✅ Счётчик участников должен обновляться
+5. ✅ Аудио должно быть слышно всем участникам
+
+#### Тест 8: Завершение звонка
 1. Нажмите красную кнопку **"Завершить"**
 2. ✅ Должен отобразиться стартовый экран
-3. ✅ В другом окне должно появиться "Собеседник покинул звонок"
-4. ✅ Микрофон должен быть выключен (индикатор камеры в браузере погас)
+3. ✅ В других окнах должно появиться "Участник покинул звонок"
+4. ✅ Микрофон должен быть выключен
 
 ## Проверка через консоль браузера
 
@@ -76,32 +82,21 @@ npm start
 ```javascript
 // Должны видеть логи:
 // "Connected to signaling server, Socket ID: ..."
-// "Connection state: connected"
 ```
 
-### Проверка WebRTC соединения
+### Проверка Audio Relay
 ```javascript
 // При установке соединения должны видеть:
-// "Peer connection created"
-// "Offer created: ..."
-// "ICE candidate generated: ..."
-// "Remote track received: ..."
-// "WebRTC connection state: connected"
+// "[AudioRelay] ✅ Microphone access granted"
+// "[AudioRelay] 🎤 Capture started { sampleRate: 48000, ... }"
+// "[AudioRelay] 🔊 Playback context created { sampleRate: 48000 }"
 ```
 
 ### Проверка аудио потоков
 ```javascript
-// Проверить локальный поток
 console.log('Local stream:', document.getElementById('local-audio').srcObject);
-
-// Проверить удаленный поток
-console.log('Remote stream:', document.getElementById('remote-audio').srcObject);
-
-// Проверить треки
-const remoteAudio = document.getElementById('remote-audio');
-if (remoteAudio.srcObject) {
-  console.log('Audio tracks:', remoteAudio.srcObject.getAudioTracks());
-}
+console.log('Capturing:', audioRelay.isCapturing);
+console.log('Muted:', audioRelay.isMuted);
 ```
 
 ## Проверка Network в DevTools
@@ -112,18 +107,16 @@ if (remoteAudio.srcObject) {
 4. Кликните на соединение → Messages
 5. ✅ Должны видеть обмен сообщениями:
    - `create-room` / `join-room`
-   - `offer`, `answer`
-   - `ice-candidate`
+   - `audio-data` (бинарные данные)
    - `message` (при отправке чата)
 
 ## Тестирование ошибок
 
 ### Тест: Отказ в доступе к микрофону
-1. Откройте настройки браузера
-2. Заблокируйте доступ к микрофону для localhost
-3. Попробуйте создать комнату
-4. ✅ Должно появиться уведомление об ошибке
-5. ✅ Должен вернуться на стартовый экран
+1. Заблокируйте доступ к микрофону для localhost
+2. Попробуйте создать комнату
+3. ✅ Должно появиться уведомление об ошибке
+4. ✅ Должен вернуться на стартовый экран
 
 ### Тест: Несуществующая комната
 1. Введите несуществующий ID (например, "XXXXXX")
@@ -131,10 +124,9 @@ if (remoteAudio.srcObject) {
 3. ✅ Должно появиться уведомление "Room not found"
 
 ### Тест: Полная комната
-1. Создайте комнату в первом окне
-2. Присоединитесь во втором окне
-3. Попробуйте присоединиться в третьем окне с тем же ID
-4. ✅ Должно появиться уведомление "Room is full"
+1. Создайте комнату и заполните до `maxRoomSize` (10) участников
+2. Попробуйте присоединиться ещё одним пользователем
+3. ✅ Должно появиться уведомление "Room is full"
 
 ### Тест: Потеря соединения с сервером
 1. Установите звонок между двумя окнами
@@ -149,13 +141,7 @@ if (remoteAudio.srcObject) {
 2. Выберите мобильное устройство (iPhone, Android)
 3. ✅ Интерфейс должен корректно отображаться
 4. ✅ Кнопки должны быть достаточно большими для нажатия
-5. ✅ Текст должен быть читаемым
-
-### Анимации
-1. ✅ При создании/присоединении к комнате должна быть плавная анимация
-2. ✅ Аудио бары должны анимироваться
-3. ✅ Аватар должен пульсировать
-4. ✅ Уведомления должны появляться с анимацией справа
+5. ✅ Сетка участников должна адаптироваться
 
 ### Темная тема
 1. ✅ Все элементы должны быть видны на темном фоне
@@ -178,8 +164,6 @@ if (remoteAudio.srcObject) {
 
 ## Кросс-браузерное тестирование
 
-Протестируйте в разных браузерах:
-
 | Браузер | Версия | Статус |
 |---------|--------|--------|
 | Chrome  | 100+   | ✅     |
@@ -188,61 +172,37 @@ if (remoteAudio.srcObject) {
 | Edge    | 100+   | ✅     |
 
 ### Особенности Safari
-- Требуется HTTPS для production
+- Требуется HTTPS для production (`getUserMedia`)
 - Может потребоваться дополнительное разрешение для микрофона
 
 ## Автоматизированное тестирование
-
-Создайте простой тест-скрипт:
 
 ```javascript
 // Вставьте в консоль браузера
 async function runClientTests() {
   console.log('🧪 Запуск тестов клиента...\n');
   
-  // Тест 1: Проверка наличия Socket.io
-  if (typeof io !== 'undefined') {
-    console.log('✅ Socket.io загружен');
-  } else {
-    console.error('❌ Socket.io не найден');
-  }
+  // Тест 1: Socket.io
+  console.log(typeof io !== 'undefined' ? '✅ Socket.io загружен' : '❌ Socket.io не найден');
   
-  // Тест 2: Проверка WebRTC API
-  if (typeof RTCPeerConnection !== 'undefined') {
-    console.log('✅ WebRTC API доступен');
-  } else {
-    console.error('❌ WebRTC API недоступен');
-  }
+  // Тест 2: getUserMedia
+  console.log(navigator.mediaDevices?.getUserMedia ? '✅ getUserMedia доступен' : '❌ getUserMedia недоступен');
   
-  // Тест 3: Проверка getUserMedia
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    console.log('✅ getUserMedia доступен');
-  } else {
-    console.error('❌ getUserMedia недоступен');
-  }
-  
-  // Тест 4: Проверка элементов DOM
-  const requiredElements = [
-    'start-screen',
-    'room-screen',
-    'create-room-btn',
-    'join-room-btn',
-    'remote-audio',
-    'local-audio'
-  ];
-  
-  let allElementsFound = true;
-  requiredElements.forEach(id => {
-    if (document.getElementById(id)) {
-      console.log(`✅ Элемент #${id} найден`);
-    } else {
-      console.error(`❌ Элемент #${id} не найден`);
-      allElementsFound = false;
-    }
+  // Тест 3: Элементы DOM
+  const required = ['start-screen', 'room-screen', 'create-room-btn', 'join-room-btn', 'remote-audio', 'local-audio', 'participants-grid'];
+  let ok = true;
+  required.forEach(id => {
+    const found = !!document.getElementById(id);
+    console.log(found ? `✅ #${id}` : `❌ #${id} не найден`);
+    if (!found) ok = false;
   });
   
+  // Тест 4: Классы
+  console.log(typeof SignalingManager !== 'undefined' ? '✅ SignalingManager' : '❌ SignalingManager не найден');
+  console.log(typeof AudioRelayManager !== 'undefined' ? '✅ AudioRelayManager' : '❌ AudioRelayManager не найден');
+  
   console.log('\n🎉 Тестирование завершено!');
-  return allElementsFound;
+  return ok;
 }
 
 runClientTests();
@@ -251,69 +211,43 @@ runClientTests();
 ## Checklist проверки
 
 - [ ] Сервер запущен и доступен
-- [ ] Страница загружается без ошибок
+- [ ] Страница загружается без ошибок в консоли
 - [ ] Можно создать комнату
 - [ ] Можно присоединиться к комнате
 - [ ] Разрешения на микрофон запрашиваются
 - [ ] Аудио связь работает в обе стороны
+- [ ] Многопользовательский режим (3+ участников)
 - [ ] Микрофон можно выключить/включить
 - [ ] Чат отправляет и получает сообщения
-- [ ] ID комнаты копируется в буфер
+- [ ] Ссылка на комнату копируется в буфер
 - [ ] Звонок можно завершить
 - [ ] Уведомления отображаются корректно
-- [ ] Анимации работают плавно
 - [ ] Интерфейс адаптивен на мобильных
-- [ ] Нет ошибок в консоли браузера
 - [ ] WebSocket соединение стабильно
 
 ## Известные проблемы
 
-### Проблема: Эхо в звонке
+### Эхо в звонке
 **Причина**: Оба окна открыты на одном компьютере  
 **Решение**: Используйте наушники или тестируйте на разных устройствах
 
-### Проблема: Микрофон не работает
+### Микрофон не работает
 **Причина**: Нет разрешений или микрофон занят  
-**Решение**: 
-- Проверьте разрешения в браузере (иконка замка в адресной строке)
-- Закройте другие приложения, использующие микрофон
+**Решение**: Проверьте разрешения (иконка замка), закройте другие приложения с микрофоном
 
-### Проблема: Не слышно собеседника
-**Причина**: Проблемы с WebRTC соединением  
-**Решение**:
-- Проверьте консоль на ошибки
-- Убедитесь, что оба пользователя в одной комнате
-- Проверьте настройки громкости
-
-## Логирование для отладки
-
-Включите подробное логирование в консоли:
-
-```javascript
-// В main.js добавьте в начало файла
-window.DEBUG = true;
-
-// Затем в коде используйте
-if (window.DEBUG) {
-  console.log('Debug info:', data);
-}
-```
+### Не слышно собеседника
+**Причина**: Проблемы с Audio Relay или WebSocket  
+**Решение**: Проверьте консоль на ошибки, убедитесь что оба в одной комнате, проверьте громкость
 
 ## Полезные команды для отладки
 
 ```javascript
-// Проверить состояние WebRTC
-console.log('WebRTC state:', webrtcManager.getConnectionState());
-
-// Проверить состояние сигнализации
-console.log('Signaling connected:', signalingManager.getConnectionState());
-
-// Проверить ID комнаты
+// Состояние сигнализации
+console.log('Connected:', signalingManager.getConnectionState());
 console.log('Room ID:', signalingManager.getRoomId());
 
-// Проверить локальный поток
-console.log('Local stream:', webrtcManager.localStream);
-
-// Проверить удаленный поток
-console.log('Remote stream:', webrtcManager.remoteStream);
+// Состояние Audio Relay
+console.log('Capturing:', audioRelay.isCapturing);
+console.log('Muted:', audioRelay.isMuted);
+console.log('Local stream:', !!audioRelay.localStream);
 ```

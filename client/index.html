@@ -67,7 +67,8 @@
             </div>
             <p id="call-status" class="call-status">Ожидание собеседников...</p>
 
-            <div id="audio-container" style="display:none"></div>
+            <audio id="remote-audio" autoplay></audio>
+            <audio id="local-audio" muted></audio>
           </div>
 
           <div class="controls">
@@ -122,7 +123,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/signaling.js"></script>
-  <script src="js/webrtc.js"></script>
+  <script src="js/audio-relay.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

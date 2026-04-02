@@ -2,6 +2,7 @@ class AudioRelayManager {
   constructor() {
     this.captureContext = null;
     this.playbackContext = null;
+    this.gainNode = null;
     this.processor = null;
     this.source = null;
     this.sendCallback = null;
@@ -9,8 +10,8 @@ class AudioRelayManager {
     this.isMuted = false;
     this.nextPlayTime = 0;
     this.localStream = null;
-    this.targetSampleRate = 16000;
-    this.bufferSize = 4096;
+    this.targetSampleRate = 48000;
+    this.bufferSize = 2048;
   }
 
   async initialize() {
@@ -21,7 +22,8 @@ class AudioRelayManager {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          sampleRate: 48000
         },
         video: false
       });
@@ -30,8 +32,7 @@ class AudioRelayManager {
         tracks: this.localStream.getAudioTracks().map(t => ({
           id: t.id,
           label: t.label,
-          enabled: t.enabled,
-          muted: t.muted
+          enabled: t.enabled
         }))
       });
       
@@ -49,7 +50,7 @@ class AudioRelayManager {
     }
     
     this.sendCallback = sendCallback;
-    this.captureContext = new AudioContext();
+    this.captureContext = new AudioContext({ sampleRate: this.targetSampleRate });
     const actualSampleRate = this.captureContext.sampleRate;
     const ratio = actualSampleRate / this.targetSampleRate;
     
@@ -60,8 +61,8 @@ class AudioRelayManager {
       if (!this.isCapturing || this.isMuted) return;
       
       const input = e.inputBuffer.getChannelData(0);
-      const downsampled = this._downsample(input, ratio);
-      const int16 = this._float32ToInt16(downsampled);
+      const samples = (ratio > 1) ? this._downsample(input, ratio) : input;
+      const int16 = this._float32ToInt16(samples);
       
       if (this.sendCallback) {
         this.sendCallback(int16.buffer);
@@ -75,15 +76,18 @@ class AudioRelayManager {
     console.log('[AudioRelay] 🎤 Capture started', {
       sampleRate: actualSampleRate,
       targetRate: this.targetSampleRate,
-      downsampleRatio: ratio,
+      ratio: ratio.toFixed(2),
       bufferSize: this.bufferSize,
-      chunkDuration: (this.bufferSize / actualSampleRate * 1000).toFixed(1) + 'ms'
+      chunkMs: (this.bufferSize / actualSampleRate * 1000).toFixed(1) + 'ms'
     });
   }
 
   playAudio(arrayBuffer) {
     if (!this.playbackContext) {
-      this.playbackContext = new AudioContext();
+      this.playbackContext = new AudioContext({ sampleRate: this.targetSampleRate });
+      this.gainNode = this.playbackContext.createGain();
+      this.gainNode.gain.value = 1.0;
+      this.gainNode.connect(this.playbackContext.destination);
       this.nextPlayTime = 0;
       console.log('[AudioRelay] 🔊 Playback context created', {
         sampleRate: this.playbackContext.sampleRate
@@ -102,11 +106,11 @@ class AudioRelayManager {
     
     const source = this.playbackContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.playbackContext.destination);
+    source.connect(this.gainNode);
     
     const now = this.playbackContext.currentTime;
     if (this.nextPlayTime < now) {
-      this.nextPlayTime = now + 0.05;
+      this.nextPlayTime = now + 0.02;
     }
     
     source.start(this.nextPlayTime);
@@ -141,6 +145,10 @@ class AudioRelayManager {
       this.source.disconnect();
       this.source = null;
     }
+    if (this.gainNode) {
+      this.gainNode.disconnect();
+      this.gainNode = null;
+    }
     if (this.captureContext) {
       this.captureContext.close().catch(() => {});
       this.captureContext = null;
@@ -151,7 +159,6 @@ class AudioRelayManager {
     }
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
-        console.log('[AudioRelay] 🛑 Stopping track:', track.kind, track.label);
         track.stop();
       });
       this.localStream = null;
@@ -164,11 +171,15 @@ class AudioRelayManager {
   }
 
   _downsample(buffer, ratio) {
-    if (ratio <= 1) return buffer;
     const newLength = Math.floor(buffer.length / ratio);
     const result = new Float32Array(newLength);
     for (let i = 0; i < newLength; i++) {
-      result[i] = buffer[Math.floor(i * ratio)];
+      const pos = i * ratio;
+      const index = Math.floor(pos);
+      const frac = pos - index;
+      const a = buffer[index] || 0;
+      const b = buffer[Math.min(index + 1, buffer.length - 1)] || 0;
+      result[i] = a + frac * (b - a);
     }
     return result;
   }

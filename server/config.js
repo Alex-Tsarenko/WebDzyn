@@ -17,26 +17,6 @@ module.exports = {
     }
   },
   
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: process.env.TURN_URL || 'turn:openrelay.metered.ca:80',
-      username: process.env.TURN_USERNAME || 'openrelayproject',
-      credential: process.env.TURN_CREDENTIAL || 'openrelayproject'
-    },
-    {
-      urls: process.env.TURN_URL_TLS || 'turn:openrelay.metered.ca:443',
-      username: process.env.TURN_USERNAME || 'openrelayproject',
-      credential: process.env.TURN_CREDENTIAL || 'openrelayproject'
-    },
-    {
-      urls: process.env.TURNS_URL || 'turns:openrelay.metered.ca:443',
-      username: process.env.TURN_USERNAME || 'openrelayproject',
-      credential: process.env.TURN_CREDENTIAL || 'openrelayproject'
-    }
-  ],
-  
   maxRoomSize: 10,
   
   logging: {

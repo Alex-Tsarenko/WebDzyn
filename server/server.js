@@ -47,12 +47,11 @@ io.on('connection', (socket) => {
     
     log('info', '✅ Room created successfully', { 
       roomId, 
-      socketId: socket.id,
-      iceServers: config.iceServers
+      socketId: socket.id
     });
     
     if (callback) {
-      callback({ success: true, roomId, iceServers: config.iceServers });
+      callback({ success: true, roomId });
     }
   });
 
@@ -99,95 +98,14 @@ io.on('connection', (socket) => {
       const existingUsers = room.users.filter(id => id !== socket.id);
       log('info', '📤 Sending join confirmation', {
         roomId,
-        existingUsers,
-        iceServers: config.iceServers
+        existingUsers
       });
       callback({ 
         success: true, 
         roomId, 
-        users: existingUsers,
-        iceServers: config.iceServers 
+        users: existingUsers
       });
     }
-  });
-
-  socket.on('offer', (data) => {
-    const { roomId, offer, targetUserId } = data;
-    log('info', '📝 Offer received', { 
-      roomId, 
-      from: socket.id, 
-      to: targetUserId || 'broadcast',
-      offerType: offer?.type,
-      hasSdp: !!offer?.sdp
-    });
-    
-    if (targetUserId) {
-      log('info', '📤 Forwarding offer to specific user', { from: socket.id, to: targetUserId });
-      io.to(targetUserId).emit('offer', {
-        offer,
-        userId: socket.id
-      });
-    } else {
-      log('info', '📤 Broadcasting offer to room', { roomId, from: socket.id });
-      socket.to(roomId).emit('offer', {
-        offer,
-        userId: socket.id
-      });
-    }
-    log('info', '✅ Offer forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
-  });
-
-  socket.on('answer', (data) => {
-    const { roomId, answer, targetUserId } = data;
-    log('info', '📝 Answer received', { 
-      roomId, 
-      from: socket.id, 
-      to: targetUserId || 'broadcast',
-      answerType: answer?.type,
-      hasSdp: !!answer?.sdp
-    });
-    
-    if (targetUserId) {
-      log('info', '📤 Forwarding answer to specific user', { from: socket.id, to: targetUserId });
-      io.to(targetUserId).emit('answer', {
-        answer,
-        userId: socket.id
-      });
-    } else {
-      log('info', '📤 Broadcasting answer to room', { roomId, from: socket.id });
-      socket.to(roomId).emit('answer', {
-        answer,
-        userId: socket.id
-      });
-    }
-    log('info', '✅ Answer forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
-  });
-
-  socket.on('ice-candidate', (data) => {
-    const { roomId, candidate, targetUserId } = data;
-    log('info', '🧊 ICE candidate received', { 
-      roomId, 
-      from: socket.id, 
-      to: targetUserId || 'broadcast',
-      candidateType: candidate?.type,
-      protocol: candidate?.protocol,
-      hasCandidate: !!candidate?.candidate
-    });
-    
-    if (targetUserId) {
-      log('info', '📤 Forwarding ICE candidate to specific user', { from: socket.id, to: targetUserId });
-      io.to(targetUserId).emit('ice-candidate', {
-        candidate,
-        userId: socket.id
-      });
-    } else {
-      log('info', '📤 Broadcasting ICE candidate to room', { roomId, from: socket.id });
-      socket.to(roomId).emit('ice-candidate', {
-        candidate,
-        userId: socket.id
-      });
-    }
-    log('info', '✅ ICE candidate forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
   });
 
   socket.on('audio-data', (data) => {

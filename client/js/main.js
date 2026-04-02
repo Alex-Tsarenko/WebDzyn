@@ -1,5 +1,5 @@
 let signalingManager;
-let webrtcManager;
+let audioRelay;
 let remoteUsers = new Set();
 let unreadMessages = 0;
 
@@ -18,7 +18,8 @@ const elements = {
   participantsCount: document.getElementById('participants-count'),
   muteBtn: document.getElementById('mute-btn'),
   endCallBtn: document.getElementById('end-call-btn'),
-  audioContainer: document.getElementById('audio-container'),
+  remoteAudio: document.getElementById('remote-audio'),
+  localAudio: document.getElementById('local-audio'),
   toggleChatBtn: document.getElementById('toggle-chat-btn'),
   chatContainer: document.getElementById('chat-container'),
   chatMessages: document.getElementById('chat-messages'),
@@ -35,40 +36,13 @@ const elements = {
 
 function init() {
   signalingManager = new SignalingManager();
-  webrtcManager = new WebRTCManager();
+  audioRelay = new AudioRelayManager();
 
-  setupWebRTCCallbacks();
   setupEventListeners();
   setupSignalingCallbacks();
 
   connectToServer();
   checkUrlParameters();
-}
-
-function setupWebRTCCallbacks() {
-  webrtcManager.onIceCandidate = (candidate, userId) => {
-    signalingManager.sendIceCandidate(candidate, userId);
-  };
-
-  webrtcManager.onRemoteStream = (stream, userId) => {
-    console.log('[Main] 📥 Remote stream from:', userId);
-    let audio = document.getElementById(`audio-${userId}`);
-    if (!audio) {
-      audio = document.createElement('audio');
-      audio.id = `audio-${userId}`;
-      audio.autoplay = true;
-      elements.audioContainer.appendChild(audio);
-    }
-    audio.srcObject = stream;
-  };
-
-  webrtcManager.onRemoteStreamRemoved = (userId) => {
-    const audio = document.getElementById(`audio-${userId}`);
-    if (audio) {
-      audio.srcObject = null;
-      audio.remove();
-    }
-  };
 }
 
 function checkUrlParameters() {
@@ -126,14 +100,15 @@ function setupSignalingCallbacks() {
     showNotification('Соединение с сервером потеряно', 'error');
   });
 
-  signalingManager.on('roomCreated', async (roomId, iceServers) => {
+  signalingManager.on('roomCreated', async (roomId) => {
     console.log('[Main] 🏠 Room created:', roomId);
     
     showRoomScreen(roomId);
     showNotification('Комната создана! Поделитесь ID с собеседниками.', 'success');
     
     try {
-      await webrtcManager.initialize(iceServers);
+      const localStream = await audioRelay.initialize();
+      elements.localAudio.srcObject = localStream;
       console.log('[Main] 🎤 Microphone ready, waiting for peers...');
       elements.callStatus.textContent = 'Ожидание собеседников...';
       updateParticipantsCount();
@@ -144,7 +119,7 @@ function setupSignalingCallbacks() {
     }
   });
 
-  signalingManager.on('roomJoined', async (roomId, users, iceServers) => {
+  signalingManager.on('roomJoined', async (roomId, users) => {
     console.log('[Main] 🚪 Joined room:', roomId);
     console.log('[Main] 👥 Existing users:', users);
     
@@ -152,15 +127,17 @@ function setupSignalingCallbacks() {
     showNotification('Вы присоединились к комнате', 'success');
     
     try {
-      await webrtcManager.initialize(iceServers);
+      const localStream = await audioRelay.initialize();
+      elements.localAudio.srcObject = localStream;
       
       if (users.length > 0) {
         users.forEach(userId => {
           remoteUsers.add(userId);
           addParticipantCard(userId);
         });
+        startAudioRelay();
         updateCallStatus();
-        console.log('[Main] � Waiting for offers from existing users:', Array.from(remoteUsers));
+        console.log('[Main] 🔊 Audio relay started with users:', Array.from(remoteUsers));
       }
       updateParticipantsCount();
     } catch (error) {
@@ -170,60 +147,33 @@ function setupSignalingCallbacks() {
     }
   });
 
-  signalingManager.on('userJoined', async (userId) => {
+  signalingManager.on('userJoined', (userId) => {
     console.log('[Main] 👤 User joined:', userId);
     remoteUsers.add(userId);
     addParticipantCard(userId);
+    
+    if (remoteUsers.size === 1) {
+      startAudioRelay();
+    }
+    
     updateCallStatus();
     updateParticipantsCount();
     showNotification('Новый участник присоединился к звонку', 'success');
-    
-    try {
-      const offer = await webrtcManager.createOffer(userId);
-      signalingManager.sendOffer(offer, userId);
-      console.log('[Main] � Offer sent to:', userId);
-    } catch (error) {
-      console.error('[Main] ❌ Error creating offer for', userId, error);
-    }
+    console.log('[Main] 🔊 Remote users:', Array.from(remoteUsers));
   });
 
   signalingManager.on('userLeft', (userId) => {
     console.log('[Main] 👤 User left:', userId);
     remoteUsers.delete(userId);
     removeParticipantCard(userId);
-    webrtcManager.removePeer(userId);
     updateCallStatus();
     updateParticipantsCount();
     showNotification('Участник покинул звонок', 'error');
     console.log('[Main] 👥 Remaining users:', Array.from(remoteUsers));
   });
 
-  signalingManager.on('offer', async (offer, userId) => {
-    console.log('[Main] 📥 Offer from:', userId);
-    try {
-      const answer = await webrtcManager.handleOffer(offer, userId);
-      signalingManager.sendAnswer(answer, userId);
-      console.log('[Main] 📝 Answer sent to:', userId);
-    } catch (error) {
-      console.error('[Main] ❌ Error handling offer from', userId, error);
-    }
-  });
-
-  signalingManager.on('answer', async (answer, userId) => {
-    console.log('[Main] 📥 Answer from:', userId);
-    try {
-      await webrtcManager.handleAnswer(answer, userId);
-    } catch (error) {
-      console.error('[Main] ❌ Error handling answer from', userId, error);
-    }
-  });
-
-  signalingManager.on('iceCandidate', async (candidate, userId) => {
-    try {
-      await webrtcManager.addIceCandidate(candidate, userId);
-    } catch (error) {
-      console.error('[Main] ❌ Error adding ICE candidate from', userId, error);
-    }
+  signalingManager.on('audioData', (audioBuffer, userId) => {
+    audioRelay.playAudio(audioBuffer);
   });
 
   signalingManager.on('message', (message, userId, timestamp) => {
@@ -234,6 +184,13 @@ function setupSignalingCallbacks() {
       updateUnreadCount();
     }
   });
+}
+
+function startAudioRelay() {
+  audioRelay.startCapture((audioBuffer) => {
+    signalingManager.sendAudioData(audioBuffer);
+  });
+  console.log('[Main] 🎤 Audio capture and relay started');
 }
 
 async function connectToServer() {
@@ -307,7 +264,7 @@ function handleCopyRoomId() {
 }
 
 function handleToggleMute() {
-  const isMuted = webrtcManager.toggleMute();
+  const isMuted = audioRelay.toggleMute();
   
   if (isMuted) {
     elements.muteBtn.classList.add('muted');
@@ -322,8 +279,7 @@ function handleToggleMute() {
 
 function handleEndCall() {
   signalingManager.leaveRoom();
-  webrtcManager.close();
-  clearRemoteAudio();
+  audioRelay.stop();
   
   elements.startScreen.classList.add('active');
   elements.roomScreen.classList.remove('active');
@@ -424,12 +380,6 @@ function removeParticipantCard(userId) {
 function clearParticipantsGrid() {
   const cards = elements.participantsGrid.querySelectorAll('.participant-card:not(.self)');
   cards.forEach(card => card.remove());
-}
-
-function clearRemoteAudio() {
-  if (elements.audioContainer) {
-    elements.audioContainer.innerHTML = '';
-  }
 }
 
 function updateParticipantsCount() {

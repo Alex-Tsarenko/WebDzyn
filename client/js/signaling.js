@@ -11,9 +11,6 @@ class SignalingManager {
       onRoomJoined: null,
       onUserJoined: null,
       onUserLeft: null,
-      onOffer: null,
-      onAnswer: null,
-      onIceCandidate: null,
       onMessage: null,
       onAudioData: null,
       onError: null
@@ -69,27 +66,6 @@ class SignalingManager {
           }
         });
 
-        this.socket.on('offer', (data) => {
-          console.log('Offer received from:', data.userId);
-          if (this.callbacks.onOffer) {
-            this.callbacks.onOffer(data.offer, data.userId);
-          }
-        });
-
-        this.socket.on('answer', (data) => {
-          console.log('Answer received from:', data.userId);
-          if (this.callbacks.onAnswer) {
-            this.callbacks.onAnswer(data.answer, data.userId);
-          }
-        });
-
-        this.socket.on('ice-candidate', (data) => {
-          console.log('ICE candidate received from:', data.userId);
-          if (this.callbacks.onIceCandidate) {
-            this.callbacks.onIceCandidate(data.candidate, data.userId);
-          }
-        });
-
         this.socket.on('message', (data) => {
           console.log('Message received:', data);
           if (this.callbacks.onMessage) {
@@ -123,7 +99,7 @@ class SignalingManager {
           console.log('Room created:', this.roomId);
           
           if (this.callbacks.onRoomCreated) {
-            this.callbacks.onRoomCreated(response.roomId, response.iceServers);
+            this.callbacks.onRoomCreated(response.roomId);
           }
           
           resolve(response);
@@ -148,7 +124,7 @@ class SignalingManager {
           console.log('Joined room:', roomId);
           
           if (this.callbacks.onRoomJoined) {
-            this.callbacks.onRoomJoined(roomId, response.users, response.iceServers);
+            this.callbacks.onRoomJoined(roomId, response.users);
           }
           
           resolve(response);
@@ -158,51 +134,6 @@ class SignalingManager {
         }
       });
     });
-  }
-
-  sendOffer(offer, targetUserId = null) {
-    if (!this.socket || !this.roomId) {
-      console.error('Cannot send offer: not in a room');
-      return;
-    }
-
-    this.socket.emit('offer', {
-      roomId: this.roomId,
-      offer: offer,
-      targetUserId: targetUserId
-    });
-
-    console.log('Offer sent to:', targetUserId || 'room');
-  }
-
-  sendAnswer(answer, targetUserId = null) {
-    if (!this.socket || !this.roomId) {
-      console.error('Cannot send answer: not in a room');
-      return;
-    }
-
-    this.socket.emit('answer', {
-      roomId: this.roomId,
-      answer: answer,
-      targetUserId: targetUserId
-    });
-
-    console.log('Answer sent to:', targetUserId || 'room');
-  }
-
-  sendIceCandidate(candidate, targetUserId = null) {
-    if (!this.socket || !this.roomId) {
-      console.error('Cannot send ICE candidate: not in a room');
-      return;
-    }
-
-    this.socket.emit('ice-candidate', {
-      roomId: this.roomId,
-      candidate: candidate,
-      targetUserId: targetUserId
-    });
-
-    console.log('ICE candidate sent to:', targetUserId || 'room');
   }
 
   sendAudioData(audioBuffer) {
