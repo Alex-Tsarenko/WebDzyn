@@ -1,6 +1,6 @@
 let signalingManager;
 let audioRelay;
-let currentRemoteUserId = null;
+let remoteUsers = new Set();
 let unreadMessages = 0;
 
 const elements = {
@@ -14,7 +14,8 @@ const elements = {
   connectionStatus: document.getElementById('connection-status'),
   connectionText: document.getElementById('connection-text'),
   callStatus: document.getElementById('call-status'),
-  userAvatar: document.getElementById('user-avatar'),
+  participantsGrid: document.getElementById('participants-grid'),
+  participantsCount: document.getElementById('participants-count'),
   muteBtn: document.getElementById('mute-btn'),
   endCallBtn: document.getElementById('end-call-btn'),
   remoteAudio: document.getElementById('remote-audio'),
@@ -103,13 +104,14 @@ function setupSignalingCallbacks() {
     console.log('[Main] 🏠 Room created:', roomId);
     
     showRoomScreen(roomId);
-    showNotification('Комната создана! Поделитесь ID с собеседником.', 'success');
+    showNotification('Комната создана! Поделитесь ID с собеседниками.', 'success');
     
     try {
       const localStream = await audioRelay.initialize();
       elements.localAudio.srcObject = localStream;
-      console.log('[Main] 🎤 Microphone ready, waiting for peer...');
-      elements.callStatus.textContent = 'Ожидание собеседника...';
+      console.log('[Main] 🎤 Microphone ready, waiting for peers...');
+      elements.callStatus.textContent = 'Ожидание собеседников...';
+      updateParticipantsCount();
     } catch (error) {
       console.error('[Main] ❌ Error initializing:', error);
       showNotification(error.message, 'error');
@@ -129,12 +131,15 @@ function setupSignalingCallbacks() {
       elements.localAudio.srcObject = localStream;
       
       if (users.length > 0) {
-        currentRemoteUserId = users[0];
+        users.forEach(userId => {
+          remoteUsers.add(userId);
+          addParticipantCard(userId);
+        });
         startAudioRelay();
-        elements.callStatus.textContent = 'Звонок активен';
-        elements.userAvatar.textContent = '🔊';
-        console.log('[Main] � Audio relay started with:', currentRemoteUserId);
+        updateCallStatus();
+        console.log('[Main] 🔊 Audio relay started with users:', Array.from(remoteUsers));
       }
+      updateParticipantsCount();
     } catch (error) {
       console.error('[Main] ❌ Error joining room:', error);
       showNotification(error.message, 'error');
@@ -144,19 +149,27 @@ function setupSignalingCallbacks() {
 
   signalingManager.on('userJoined', (userId) => {
     console.log('[Main] 👤 User joined:', userId);
-    currentRemoteUserId = userId;
-    startAudioRelay();
-    elements.callStatus.textContent = 'Звонок активен';
-    elements.userAvatar.textContent = '�';
-    showNotification('Собеседник присоединился к звонку', 'success');
-    console.log('[Main] 🔊 Audio relay started with:', userId);
+    remoteUsers.add(userId);
+    addParticipantCard(userId);
+    
+    if (remoteUsers.size === 1) {
+      startAudioRelay();
+    }
+    
+    updateCallStatus();
+    updateParticipantsCount();
+    showNotification('Новый участник присоединился к звонку', 'success');
+    console.log('[Main] 🔊 Remote users:', Array.from(remoteUsers));
   });
 
   signalingManager.on('userLeft', (userId) => {
-    elements.callStatus.textContent = 'Собеседник покинул звонок';
-    elements.userAvatar.textContent = '👤';
-    showNotification('Собеседник покинул звонок', 'error');
-    currentRemoteUserId = null;
+    console.log('[Main] 👤 User left:', userId);
+    remoteUsers.delete(userId);
+    removeParticipantCard(userId);
+    updateCallStatus();
+    updateParticipantsCount();
+    showNotification('Участник покинул звонок', 'error');
+    console.log('[Main] 👥 Remaining users:', Array.from(remoteUsers));
   });
 
   signalingManager.on('audioData', (audioBuffer, userId) => {
@@ -279,7 +292,8 @@ function handleEndCall() {
   elements.chatContainer.classList.add('hidden');
   elements.chatMessages.innerHTML = '';
   elements.chatInput.value = '';
-  currentRemoteUserId = null;
+  remoteUsers.clear();
+  clearParticipantsGrid();
   unreadMessages = 0;
   updateUnreadCount();
   
@@ -334,6 +348,51 @@ function updateUnreadCount() {
     elements.unreadCount.classList.remove('hidden');
   } else {
     elements.unreadCount.classList.add('hidden');
+  }
+}
+
+function addParticipantCard(userId) {
+  const card = document.createElement('div');
+  card.className = 'participant-card';
+  card.id = `participant-${userId}`;
+  
+  const avatar = document.createElement('div');
+  avatar.className = 'participant-avatar';
+  avatar.textContent = '🔊';
+  
+  const name = document.createElement('div');
+  name.className = 'participant-name';
+  name.textContent = `Участник ${userId.substring(0, 4)}`;
+  
+  card.appendChild(avatar);
+  card.appendChild(name);
+  elements.participantsGrid.appendChild(card);
+}
+
+function removeParticipantCard(userId) {
+  const card = document.getElementById(`participant-${userId}`);
+  if (card) {
+    card.classList.add('leaving');
+    setTimeout(() => card.remove(), 300);
+  }
+}
+
+function clearParticipantsGrid() {
+  const cards = elements.participantsGrid.querySelectorAll('.participant-card:not(.self)');
+  cards.forEach(card => card.remove());
+}
+
+function updateParticipantsCount() {
+  elements.participantsCount.textContent = remoteUsers.size + 1;
+}
+
+function updateCallStatus() {
+  if (remoteUsers.size === 0) {
+    elements.callStatus.textContent = 'Ожидание собеседников...';
+  } else if (remoteUsers.size === 1) {
+    elements.callStatus.textContent = 'Звонок активен — 1 собеседник';
+  } else {
+    elements.callStatus.textContent = `Звонок активен — ${remoteUsers.size} собеседников`;
   }
 }
 

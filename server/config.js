@@ -37,7 +37,7 @@ module.exports = {
     }
   ],
   
-  maxRoomSize: 2,
+  maxRoomSize: 10,
   
   logging: {
     enabled: true,

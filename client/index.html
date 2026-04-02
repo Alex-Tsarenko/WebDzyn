@@ -56,19 +56,16 @@
           </div>
 
           <div class="call-area">
-            <div class="audio-visualizer">
-              <div class="avatar">
-                <span id="user-avatar">👤</span>
-              </div>
-              <div class="audio-bars">
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-              </div>
-              <p id="call-status" class="call-status">Ожидание собеседника...</p>
+            <div class="participants-header">
+              <span>👥 Участники: <span id="participants-count">1</span></span>
             </div>
+            <div id="participants-grid" class="participants-grid">
+              <div class="participant-card self" id="local-participant">
+                <div class="participant-avatar">🎤</div>
+                <div class="participant-name">Вы</div>
+              </div>
+            </div>
+            <p id="call-status" class="call-status">Ожидание собеседников...</p>
 
             <audio id="remote-audio" autoplay></audio>
             <audio id="local-audio" muted></audio>
