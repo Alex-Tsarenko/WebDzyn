@@ -1,5 +1,5 @@
 let signalingManager;
-let webrtcManager;
+let audioRelay;
 let currentRemoteUserId = null;
 let unreadMessages = 0;
 
@@ -35,11 +35,10 @@ const elements = {
 
 function init() {
   signalingManager = new SignalingManager();
-  webrtcManager = new WebRTCManager();
+  audioRelay = new AudioRelayManager();
 
   setupEventListeners();
   setupSignalingCallbacks();
-  setupWebRTCCallbacks();
 
   connectToServer();
   checkUrlParameters();
@@ -102,22 +101,14 @@ function setupSignalingCallbacks() {
 
   signalingManager.on('roomCreated', async (roomId, iceServers) => {
     console.log('[Main] 🏠 Room created:', roomId);
-    console.log('[Main] 🧊 ICE servers:', iceServers);
     
     showRoomScreen(roomId);
     showNotification('Комната создана! Поделитесь ID с собеседником.', 'success');
     
     try {
-      const localStream = await webrtcManager.initialize(iceServers);
-      console.log('[Main] 🎤 Local stream initialized, attaching to audio element');
-      
+      const localStream = await audioRelay.initialize();
       elements.localAudio.srcObject = localStream;
-      console.log('[Main] 🎤 Local audio element:', {
-        srcObject: elements.localAudio.srcObject,
-        muted: elements.localAudio.muted,
-        volume: elements.localAudio.volume
-      });
-      
+      console.log('[Main] 🎤 Microphone ready, waiting for peer...');
       elements.callStatus.textContent = 'Ожидание собеседника...';
     } catch (error) {
       console.error('[Main] ❌ Error initializing:', error);
@@ -129,26 +120,20 @@ function setupSignalingCallbacks() {
   signalingManager.on('roomJoined', async (roomId, users, iceServers) => {
     console.log('[Main] 🚪 Joined room:', roomId);
     console.log('[Main] 👥 Existing users:', users);
-    console.log('[Main] 🧊 ICE servers:', iceServers);
     
     showRoomScreen(roomId);
     showNotification('Вы присоединились к комнате', 'success');
     
     try {
-      const localStream = await webrtcManager.initialize(iceServers);
-      console.log('[Main] 🎤 Local stream initialized, attaching to audio element');
-      
+      const localStream = await audioRelay.initialize();
       elements.localAudio.srcObject = localStream;
-      console.log('[Main] 🎤 Local audio element:', {
-        srcObject: elements.localAudio.srcObject,
-        muted: elements.localAudio.muted,
-        volume: elements.localAudio.volume
-      });
       
       if (users.length > 0) {
         currentRemoteUserId = users[0];
-        console.log('[Main] 📞 Initiating call to user:', currentRemoteUserId);
-        await initiateCall(currentRemoteUserId);
+        startAudioRelay();
+        elements.callStatus.textContent = 'Звонок активен';
+        elements.userAvatar.textContent = '🔊';
+        console.log('[Main] � Audio relay started with:', currentRemoteUserId);
       }
     } catch (error) {
       console.error('[Main] ❌ Error joining room:', error);
@@ -157,13 +142,14 @@ function setupSignalingCallbacks() {
     }
   });
 
-  signalingManager.on('userJoined', async (userId) => {
+  signalingManager.on('userJoined', (userId) => {
     console.log('[Main] 👤 User joined:', userId);
-    console.log('[Main] ⏳ Waiting for offer from joiner (not initiating to avoid glare)');
     currentRemoteUserId = userId;
-    elements.callStatus.textContent = 'Собеседник присоединился, ожидание соединения...';
-    elements.userAvatar.textContent = '👥';
+    startAudioRelay();
+    elements.callStatus.textContent = 'Звонок активен';
+    elements.userAvatar.textContent = '�';
     showNotification('Собеседник присоединился к звонку', 'success');
+    console.log('[Main] 🔊 Audio relay started with:', userId);
   });
 
   signalingManager.on('userLeft', (userId) => {
@@ -171,45 +157,10 @@ function setupSignalingCallbacks() {
     elements.userAvatar.textContent = '👤';
     showNotification('Собеседник покинул звонок', 'error');
     currentRemoteUserId = null;
-    webrtcManager.close();
   });
 
-  signalingManager.on('offer', async (offer, userId) => {
-    console.log('[Main] 📥 Received offer from:', userId);
-    currentRemoteUserId = userId;
-    
-    try {
-      console.log('[Main] 🔗 Creating peer connection for answer...');
-      webrtcManager.createPeerConnection((candidate) => {
-        console.log('[Main] 📤 Sending ICE candidate to:', currentRemoteUserId);
-        signalingManager.sendIceCandidate(candidate, currentRemoteUserId);
-      });
-      
-      console.log('[Main] 📝 Handling offer and creating answer...');
-      await webrtcManager.handleOffer(offer);
-      const answer = await webrtcManager.createAnswer();
-      
-      console.log('[Main] 📤 Sending answer to:', userId);
-      signalingManager.sendAnswer(answer, userId);
-      
-      elements.callStatus.textContent = 'Соединение установлено';
-      elements.userAvatar.textContent = '👥';
-    } catch (error) {
-      console.error('[Main] ❌ Error handling offer:', error);
-      showNotification('Ошибка при обработке offer', 'error');
-    }
-  });
-
-  signalingManager.on('answer', async (answer, userId) => {
-    console.log('[Main] 📥 Received answer from:', userId);
-    await webrtcManager.handleAnswer(answer);
-    console.log('[Main] ✅ Answer processed');
-    elements.callStatus.textContent = 'Звонок активен';
-  });
-
-  signalingManager.on('iceCandidate', async (candidate, userId) => {
-    console.log('[Main] 📥 Received ICE candidate from:', userId);
-    await webrtcManager.addIceCandidate(candidate);
+  signalingManager.on('audioData', (audioBuffer, userId) => {
+    audioRelay.playAudio(audioBuffer);
   });
 
   signalingManager.on('message', (message, userId, timestamp) => {
@@ -222,59 +173,11 @@ function setupSignalingCallbacks() {
   });
 }
 
-function setupWebRTCCallbacks() {
-  webrtcManager.onRemoteStream((stream) => {
-    console.log('[Main] 📥 Remote stream received, attaching to audio element');
-    console.log('[Main] 📥 Stream details:', stream);
-    console.log('[Main] 📥 Stream tracks:', stream.getTracks());
-    
-    elements.remoteAudio.srcObject = stream;
-    
-    console.log('[Main] 🔊 Remote audio element:', {
-      srcObject: elements.remoteAudio.srcObject,
-      paused: elements.remoteAudio.paused,
-      muted: elements.remoteAudio.muted,
-      volume: elements.remoteAudio.volume,
-      readyState: elements.remoteAudio.readyState
-    });
-    
-    elements.remoteAudio.play().then(() => {
-      console.log('[Main] ✅ Remote audio playing');
-    }).catch(err => {
-      console.error('[Main] ❌ Error playing remote audio:', err);
-    });
-    
-    elements.callStatus.textContent = 'Звонок активен';
-    elements.userAvatar.textContent = '🔊';
-    showNotification('Аудио поток получен', 'success');
+function startAudioRelay() {
+  audioRelay.startCapture((audioBuffer) => {
+    signalingManager.sendAudioData(audioBuffer);
   });
-
-  webrtcManager.onConnectionStateChange((state) => {
-    console.log('WebRTC connection state:', state);
-    
-    switch (state) {
-      case 'connected':
-        elements.callStatus.textContent = 'Звонок активен';
-        updateConnectionStatus('connected', 'Соединение установлено');
-        break;
-      case 'connecting':
-        elements.callStatus.textContent = 'Соединение...';
-        updateConnectionStatus('connecting', 'Соединение...');
-        break;
-      case 'disconnected':
-        elements.callStatus.textContent = 'Соединение потеряно';
-        updateConnectionStatus('disconnected', 'Отключено');
-        break;
-      case 'failed':
-        elements.callStatus.textContent = 'Ошибка соединения';
-        updateConnectionStatus('disconnected', 'Ошибка');
-        showNotification('Не удалось установить соединение', 'error');
-        break;
-      case 'closed':
-        elements.callStatus.textContent = 'Звонок завершен';
-        break;
-    }
-  });
+  console.log('[Main] 🎤 Audio capture and relay started');
 }
 
 async function connectToServer() {
@@ -332,29 +235,6 @@ async function handleJoinRoom() {
   }
 }
 
-async function initiateCall(targetUserId) {
-  try {
-    console.log('[Main] 📞 Initiating call to:', targetUserId);
-    
-    console.log('[Main] 🔗 Creating peer connection...');
-    webrtcManager.createPeerConnection((candidate) => {
-      console.log('[Main] 📤 Sending ICE candidate to:', targetUserId);
-      signalingManager.sendIceCandidate(candidate, targetUserId);
-    });
-    
-    console.log('[Main] 📝 Creating offer...');
-    const offer = await webrtcManager.createOffer();
-    
-    console.log('[Main] 📤 Sending offer to:', targetUserId);
-    signalingManager.sendOffer(offer, targetUserId);
-    
-    elements.callStatus.textContent = 'Установка соединения...';
-  } catch (error) {
-    console.error('[Main] ❌ Error initiating call:', error);
-    showNotification('Ошибка при установке соединения', 'error');
-  }
-}
-
 function handleCopyRoomId() {
   const roomId = elements.currentRoomId.textContent;
   const roomUrl = `${window.location.origin}/?room=${roomId}`;
@@ -371,7 +251,7 @@ function handleCopyRoomId() {
 }
 
 function handleToggleMute() {
-  const isMuted = webrtcManager.toggleMute();
+  const isMuted = audioRelay.toggleMute();
   
   if (isMuted) {
     elements.muteBtn.classList.add('muted');
@@ -386,7 +266,7 @@ function handleToggleMute() {
 
 function handleEndCall() {
   signalingManager.leaveRoom();
-  webrtcManager.close();
+  audioRelay.stop();
   
   elements.startScreen.classList.add('active');
   elements.roomScreen.classList.remove('active');

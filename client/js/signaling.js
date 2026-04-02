@@ -15,6 +15,7 @@ class SignalingManager {
       onAnswer: null,
       onIceCandidate: null,
       onMessage: null,
+      onAudioData: null,
       onError: null
     };
   }
@@ -93,6 +94,12 @@ class SignalingManager {
           console.log('Message received:', data);
           if (this.callbacks.onMessage) {
             this.callbacks.onMessage(data.message, data.userId, data.timestamp);
+          }
+        });
+
+        this.socket.on('audio-data', (data) => {
+          if (this.callbacks.onAudioData) {
+            this.callbacks.onAudioData(data.data, data.userId);
           }
         });
 
@@ -196,6 +203,15 @@ class SignalingManager {
     });
 
     console.log('ICE candidate sent to:', targetUserId || 'room');
+  }
+
+  sendAudioData(audioBuffer) {
+    if (!this.socket || !this.roomId) return;
+    
+    this.socket.volatile.emit('audio-data', {
+      roomId: this.roomId,
+      data: audioBuffer
+    });
   }
 
   sendMessage(message) {

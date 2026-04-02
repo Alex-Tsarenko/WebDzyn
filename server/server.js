@@ -190,6 +190,16 @@ io.on('connection', (socket) => {
     log('info', '✅ ICE candidate forwarded successfully', { from: socket.id, to: targetUserId || 'room' });
   });
 
+  socket.on('audio-data', (data) => {
+    const user = users.get(socket.id);
+    if (!user || !user.roomId) return;
+    
+    socket.volatile.to(user.roomId).emit('audio-data', {
+      data: data.data,
+      userId: socket.id
+    });
+  });
+
   socket.on('message', (data) => {
     const { roomId, message } = data;
     log('info', '💬 Chat message received', { 
